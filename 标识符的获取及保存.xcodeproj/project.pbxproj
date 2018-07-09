@@ -115,7 +115,7 @@
 				TargetAttributes = {
 					05759DDE1F5E87FE00744EA6 = {
 						CreatedOnToolsVersion = 8.3.3;
-						DevelopmentTeam = 69MP2TR26C;
+						DevelopmentTeam = EDBZ6CF9KP;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -279,7 +279,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				DEVELOPMENT_TEAM = 69MP2TR26C;
+				DEVELOPMENT_TEAM = EDBZ6CF9KP;
 				INFOPLIST_FILE = "标识符的获取及保存/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
@@ -292,7 +292,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				DEVELOPMENT_TEAM = 69MP2TR26C;
+				DEVELOPMENT_TEAM = EDBZ6CF9KP;
 				INFOPLIST_FILE = "标识符的获取及保存/Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 8.0;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";

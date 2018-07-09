@@ -1,31 +1,4 @@
-//
-//  BCCKeychain.m
-//
-//  Created by Buzz Andersen on 10/20/08.
-//  Based partly on code by Jonathan Wight, Jon Crosby, and Mike Malone.
-//  Copyright 2013 Brooklyn Computer Club. All rights reserved.
-//
-//  Permission is hereby granted, free of charge, to any person
-//  obtaining a copy of this software and associated documentation
-//  files (the "Software"), to deal in the Software without
-//  restriction, including without limitation the rights to use,
-//  copy, modify, merge, publish, distribute, sublicense, and/or sell
-//  copies of the Software, and to permit persons to whom the
-//  Software is furnished to do so, subject to the following
-//  conditions:
-//
-//  The above copyright notice and this permission notice shall be
-//  included in all copies or substantial portions of the Software.
-//
-//  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-//  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
-//  OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-//  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
-//  HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
-//  WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-//  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-//  OTHER DEALINGS IN THE SOFTWARE.
-//
+
 
 
 #import "SFKeychain.h"
@@ -50,213 +23,33 @@ static NSString *BCCKeychainErrorDomain = @"BCCKeychainErrorDomain";
 
 @implementation SFKeychain
 
-#pragma mark - Mac Keychain Implementation
-
-#if USE_MAC_KEYCHAIN_API
-
-+ (NSString *)getPasswordStringForUsername:(NSString *)username andServiceName:(NSString *)serviceName error:(NSError **)error
-{
-    NSData *passwordData = [BCCKeychain getPasswordDataForUsername:username andServiceName:serviceName error:error];
-    return [[NSString alloc] initWithData:passwordData encoding:NSUTF8StringEncoding];
-}
-
-+ (NSData *)getPasswordDataForUsername:(NSString *)username andServiceName:(NSString *)serviceName error:(NSError **)error
-{
-	if (!username || !serviceName) {
-        if (error) {
-            *error = [NSError errorWithDomain:BCCKeychainErrorDomain code:-2000 userInfo:nil];
-        }
-		
-        return nil;
-	}
-	
-	SecKeychainItemRef item = [BCCKeychain getKeychainItemReferenceForUsername:username andServiceName:serviceName error:error];
-	if ((error && *error) || !item) {
-		return nil;
-	}
-	
-	// from Advanced Mac OS X Programming, ch. 16
-    UInt32 passwordByteLength;
-    void *passwordBytes;
-    SecKeychainAttribute attributes[8];
-    SecKeychainAttributeList list;
-	
-    attributes[0].tag = kSecAccountItemAttr;
-    attributes[1].tag = kSecDescriptionItemAttr;
-    attributes[2].tag = kSecLabelItemAttr;
-    attributes[3].tag = kSecModDateItemAttr;
-    
-    list.count = 4;
-    list.attr = attributes;
-    
-    OSStatus status = SecKeychainItemCopyContent(item, NULL, &list, &passwordByteLength, &passwordBytes);
-	
-	if (status != noErr) {
-		if (error) {
-            *error = [NSError errorWithDomain:BCCKeychainErrorDomain code:status userInfo:nil];
-        }
-        
-		return nil;
-    }
-    
-	NSData *passwordData = [NSData dataWithBytes:passwordBytes length:passwordByteLength];
-	
-	SecKeychainItemFreeContent(&list, passwordBytes);
-    
-    CFRelease(item);
-    
-    return passwordData;
-}
-
-+ (BOOL)storeUsername:(NSString *)username andPasswordString:(NSString *)passwordString forServiceName:(NSString *)serviceName updateExisting:(BOOL)updateExisting error:(NSError **)error
-{
-    return [BCCKeychain storeUsername:username andPasswordData:[passwordString dataUsingEncoding:NSUTF8StringEncoding] forServiceName:serviceName updateExisting:updateExisting error:error];
-}
-
-+ (BOOL)storeUsername:(NSString *)username andPasswordData:(NSData *)passwordData forServiceName:(NSString *)serviceName updateExisting:(BOOL)updateExisting error:(NSError **)error
-{
-	if (!username || !passwordData || !serviceName) {
-        if (error) {
-            *error = [NSError errorWithDomain:BCCKeychainErrorDomain code:-2000 userInfo:nil];
-        }
-		return NO;
-	}
-	
-	if (error) {
-		*error = nil;
-	}
-
-	OSStatus status = noErr;
-	
-	SecKeychainItemRef item = [BCCKeychain getKeychainItemReferenceForUsername:username andServiceName:serviceName error:error];
-	
-	if (item) {
-		status = SecKeychainItemModifyAttributesAndData(item,
-                                                        NULL,
-                                                        (UInt32)[passwordData length],
-                                                        [passwordData bytes]);
-		
-		CFRelease(item);
-	} else {
-		status = SecKeychainAddGenericPassword(NULL,
-                                               (UInt32)[serviceName lengthOfBytesUsingEncoding:NSUTF8StringEncoding], 
-                                               [serviceName UTF8String],
-                                               (UInt32)[username lengthOfBytesUsingEncoding:NSUTF8StringEncoding],
-                                               [username UTF8String],
-                                               (UInt32)[passwordData length],
-                                               [passwordData bytes],
-                                               NULL);
-	}
-	
-	if (status != noErr) {
-		if (error) {
-            *error = [NSError errorWithDomain:BCCKeychainErrorDomain code:status userInfo:nil];
-        }
-        return NO;
-	}
-    
-    return YES;
-}
-
-+ (BOOL)deleteItemForUsername:(NSString *)username andServiceName:(NSString *)serviceName error:(NSError **)error
-{
-	if (!username || !serviceName) {
-        if (error) {
-            *error = [NSError errorWithDomain:BCCKeychainErrorDomain code:2000 userInfo:nil];
-        }
-		return NO;
-	}
-	
-	if (error) {
-		*error = nil;
-	}
-	
-	SecKeychainItemRef item = [BCCKeychain getKeychainItemReferenceForUsername:username andServiceName:serviceName error:error];
-	if ((error && *error) || !item) {
-        return NO;
-	}
-	
-	OSStatus status = SecKeychainItemDelete(item);
-		
-    CFRelease(item);
-	
-	if (status != noErr) {
-        if (error) {
-            *error = [NSError errorWithDomain:BCCKeychainErrorDomain code:status userInfo:nil];
-        }
-        return NO;
-	}
-    
-    return YES;
-}
-
-// NOTE: Item reference passed back by reference must be released!
-+ (SecKeychainItemRef)getKeychainItemReferenceForUsername:(NSString *)username andServiceName:(NSString *)serviceName error:(NSError **)error
-{
-	if (!username || !serviceName) {
-		*error = [NSError errorWithDomain:BCCKeychainErrorDomain code:-2000 userInfo:nil];
-		return nil;
-	}
-	
-	if (error) {
-		*error = nil;
-	}
-    
-	SecKeychainItemRef item;
-	
-	OSStatus status = SecKeychainFindGenericPassword(NULL,
-                                                     (UInt32)[serviceName lengthOfBytesUsingEncoding:NSUTF8StringEncoding],
-                                                     [serviceName UTF8String],
-                                                     (UInt32)[username lengthOfBytesUsingEncoding:NSUTF8StringEncoding],
-                                                     [username UTF8String],
-                                                     NULL,
-                                                     NULL,
-                                                     &item);
-	
-	if (status != noErr) {
-		if (status != errSecItemNotFound && error) {
-			*error = [NSError errorWithDomain:BCCKeychainErrorDomain code:status userInfo:nil];
-		}
-		
-		return nil;		
-	}
-	
-	return item;
-}
-
-#else
 
 #pragma mark - iOS Keychain Implementation
 
-+ (NSString *)getPasswordStringForUsername:(NSString *)username andServiceName:(NSString *)serviceName error:(NSError **)error
++ (NSString *)getPasswordStringForKey:(NSString *)key andServiceName:(NSString *)serviceName error:(NSError **)error
 {
-    NSData *passwordData = [SFKeychain getPasswordDataForUsername:username andServiceName:serviceName error:error];
+    NSData *passwordData = [SFKeychain getValueDataForKey:key andServiceName:serviceName error:error];
     return [[NSString alloc] initWithData:passwordData encoding:NSUTF8StringEncoding];
 }
-
-+ (NSData *)getPasswordDataForUsername:(NSString *)username andServiceName:(NSString *)serviceName error:(NSError **)error
++ (NSString *)getUserNameStringForKey:(NSString *)key andServiceName:(NSString *)serviceName error:(NSError **)error{
+    NSData *passwordData = [SFKeychain getValueDataForKey:key andServiceName:serviceName error:error];
+    return [[NSString alloc] initWithData:passwordData encoding:NSUTF8StringEncoding];
+}
++ (NSData *)getValueDataForKey:(NSString *)key andServiceName:(NSString *)serviceName error:(NSError **)error
 {
-	if (!username || !serviceName) {
+	if (!key || !serviceName) {
 		if (error) {
 			*error = [NSError errorWithDomain:BCCKeychainErrorDomain code:-2000 userInfo:nil];
 		}
 		return nil;
 	}
 	
-	/*if (error != nil) {
-		*error = nil;
-	}*/
-    
-	// Set up a query dictionary with the base query attributes: item type (generic), username, and service
 	
 	NSArray *keys = [[NSArray alloc] initWithObjects:(__bridge NSString *)kSecClass, kSecAttrAccount, kSecAttrService, nil];
-	NSArray *objects = [[NSArray alloc] initWithObjects:(__bridge NSString *)kSecClassGenericPassword, username, serviceName, nil];
+	NSArray *objects = [[NSArray alloc] initWithObjects:(__bridge NSString *)kSecClassGenericPassword, key, serviceName, nil];
 	
 	NSMutableDictionary *query = [[NSMutableDictionary alloc] initWithObjects:objects forKeys:keys];
 	
-	// First do a query for attributes, in case we already have a Keychain item with no password data set.
-	// One likely way such an incorrect item could have come about is due to the previous (incorrect)
-	// version of this code (which set the password as a generic attribute instead of password data).
 	
 	CFDataRef attributeResult = nil;
 	NSMutableDictionary *attributeQuery = [query mutableCopy];
@@ -314,15 +107,17 @@ static NSString *BCCKeychainErrorDomain = @"BCCKeychainErrorDomain";
     
 	return passwordData;
 }
-
-+ (BOOL)storeUsername:(NSString *)username andPasswordString:(NSString *)passwordString forServiceName:(NSString *)serviceName updateExisting:(BOOL)updateExisting error:(NSError **)error
++ (void)storeUsername:(NSString *)username forKey:(NSString *)key forServiceName:(NSString *)serviceName updateExisting:(BOOL)updateExisting error:(NSError **)error{
+    [SFKeychain storeValue:[username dataUsingEncoding:NSUTF8StringEncoding] forKey:key forServiceName:serviceName updateExisting:updateExisting error:error];
+}
++ (void)storePassword:(NSString *)password forKey:(NSString *)key forServiceName:(NSString *)serviceName updateExisting:(BOOL)updateExisting error:(NSError **)error
 {
-    return [SFKeychain storeUsername:username andPasswordData:[passwordString dataUsingEncoding:NSUTF8StringEncoding] forServiceName:serviceName updateExisting:updateExisting error:error];
+    [SFKeychain storeValue:[password dataUsingEncoding:NSUTF8StringEncoding] forKey:key forServiceName:serviceName updateExisting:updateExisting error:error];
 }
 
-+ (BOOL)storeUsername:(NSString *)username andPasswordData:(NSData *)passwordData forServiceName:(NSString *)serviceName updateExisting:(BOOL)updateExisting error:(NSError **)error
++ (BOOL)storeValue:(NSData *)value forKey:(NSString *)key forServiceName:(NSString *)serviceName updateExisting:(BOOL)updateExisting error:(NSError **)error
 {		
-	if (!username || !passwordData || !serviceName) {
+	if (!key || !value || !serviceName) {
 		if (error) {
 			*error = [NSError errorWithDomain:BCCKeychainErrorDomain code:-2000 userInfo:nil];
 		}
@@ -332,7 +127,7 @@ static NSString *BCCKeychainErrorDomain = @"BCCKeychainErrorDomain";
 	
 	// See if we already have a password entered for these credentials.
 	NSError *getError = nil;
-	NSData *existingPassword = [SFKeychain getPasswordDataForUsername:username andServiceName:serviceName error:&getError];
+	NSData *existingPassword = [SFKeychain getValueDataForKey:key andServiceName:serviceName error:&getError];
     
 	if ([getError code] == -1999) {
 		// There is an existing entry without a password properly stored (possibly as a result of the previous incorrect version of this code.
@@ -340,7 +135,7 @@ static NSString *BCCKeychainErrorDomain = @"BCCKeychainErrorDomain";
         
 		getError = nil;
 		
-		[self deleteItemForUsername:username andServiceName:serviceName error:&getError];
+		[self deleteItemForUsername:key andServiceName:serviceName error:&getError];
         
 		if ([getError code] != noErr) {
 			if (error) {
@@ -377,12 +172,12 @@ static NSString *BCCKeychainErrorDomain = @"BCCKeychainErrorDomain";
 			NSArray *objects = [[NSArray alloc] initWithObjects:(__bridge NSString *)kSecClassGenericPassword,
                                  serviceName,
                                  serviceName,
-                                 username,
+                                 key,
                                  nil];
 			
 			NSDictionary *query = [[NSDictionary alloc] initWithObjects:objects forKeys:keys];
 			
-			status = SecItemUpdate((__bridge CFDictionaryRef)query, (__bridge CFDictionaryRef)[NSDictionary dictionaryWithObject:passwordData forKey:(__bridge NSString *)kSecValueData]);
+			status = SecItemUpdate((__bridge CFDictionaryRef)query, (__bridge CFDictionaryRef)[NSDictionary dictionaryWithObject:value forKey:(__bridge NSString *)kSecValueData]);
 		}
 	}
 	else {
@@ -399,8 +194,8 @@ static NSString *BCCKeychainErrorDomain = @"BCCKeychainErrorDomain";
 		NSArray *objects = [[NSArray alloc] initWithObjects:(__bridge NSString *)kSecClassGenericPassword,
                              serviceName,
                              serviceName,
-                             username,
-                             passwordData,
+                             key,
+                             value,
                              nil];
 		
 		NSDictionary *query = [[NSDictionary alloc] initWithObjects:objects forKeys:keys];
@@ -450,6 +245,5 @@ static NSString *BCCKeychainErrorDomain = @"BCCKeychainErrorDomain";
     return YES;
 }
 
-#endif
 
 @end
